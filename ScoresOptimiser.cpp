@@ -155,32 +155,14 @@ pair<double, double> CScoresOptimizer::ComputeIfIq(int l, const vector<int>& vPa
 {
 	double If = 0, Iq = 0;
 	const vector<pair<int,double> >& vNeurProb = pData->vFactNeurProb[l];
-	/* Прямой расчёт без оптимизации
-	vector<pair<int,double> > vNeurProb;
-	std::vector<pair<int,double> >::const_iterator itFactNeur = pData->vFactNeurProb[l].begin();
-	for( int i = 0; i != pData->vNeurProbSpecific.size(); ++i )
-	{
-		if( itFactNeur != pData->vFactNeurProb[l].end() && itFactNeur->first == i )
-			vNeurProb.push_back( *itFactNeur ), ++itFactNeur;
-		else
-			vNeurProb.push_back( make_pair(i, 0) );
-	}*/
+	
 	std::vector<int>::const_iterator itPatNeur = vPattern.begin();
 	for(std::vector<pair<int,double> >::const_iterator itFactNeur = vNeurProb.begin(); itFactNeur != vNeurProb.end(); ++itFactNeur)
 	{
 		int i = itFactNeur->first;
 		double fProduct = 1 - max(pData->vNeurProbSpecific[i], 0.01); // q_j > 0 && p_{ij} > 0 => qi < 1; fi > 0; fi < 1 iff p_{ij} < 1
 		const vector<pair<int, double> >& vFactProb = pData->vNeurFactProb[i];
-		/* Прямой расчёт без оптимизации
-		vector<pair<int, double> > vFactProb;
-		std::vector<pair<int, double> >::const_iterator it = pData->vNeurFactProb[i].begin();
-		for( int j = 0; j != pData->vFactProb.size(); ++j )
-		{
-			if( it != pData->vNeurFactProb[i].end() && it->first == j )
-				vFactProb.push_back( *it ), ++it;
-			else
-				vFactProb.push_back( make_pair(j, 0) );
-		}*/
+		
 		int n1 = 0;
 		for(std::vector<pair<int, double> >::const_iterator it = vFactProb.begin(); it != vFactProb.end(); ++it)
 			if( it->first != l && vDenseScores[it->first] == 1 && ++n1 )
@@ -208,16 +190,7 @@ pair<double, double> CScoresOptimizer::ComputeIfIq(int l, const vector<int>& vPa
 	Iq += (1 - vFactProb[l]) == 0 ? -123456789 : log( 1 - vFactProb[l] );
 	if( vFactProb[l] == 1 || !(If > -1000000 && If < 1000000) || !(Iq > -1000000 && Iq < 1000000) )
 		int a = 0;
-	/*for( int i = 0; i != vFactProb.size(); ++i)
-	{
-		if( i != l )
-		{
-			if( vFactProb[i] != 0 )
-				If += log( vFactProb[i] );
-			Iq += (1 - vFactProb[i]) == 0 ? -123456789 : log( 1 - vFactProb[i] );
-		}
-	}
-	*/
+	
 	return make_pair(If, Iq);
 }
 
@@ -323,92 +296,6 @@ int CScoresOptimizer::MakePiCycles( vector<vector<int> >& vPatFactScores )
 }
 
 
-/*
-// synchronous maximization algorithm
-int MaximizeLikelihoodSynchronous(int k, vector<int>& vScores)
-{
-	vector<int>& vPattern = g_vPatterns[k];
-	if( vPattern.empty() )
-	{
-		vScores.clear();
-		return 0;
-	}
-
-	vector<double> vProductSpecific(Neurons, 1.0);
-	for(std::vector<double>::iterator it = g_vNeurProbSpecific.begin(); it != g_vNeurProbSpecific.end(); ++it)
-		vProductSpecific[ it - g_vNeurProbSpecific.begin() ] *= 1 - *it;
-
-	int nStep = 0;
-
-	deque<vector<int> > dPrevScores;
-	dPrevScores.push_back( vector<int>() );
-	dPrevScores.push_back( vector<int>() );
-
-	int nScoreDifference, nScoreDifference2;
-	int nCycle;
-	do 
-	{
-		dPrevScores.pop_front();
-		dPrevScores.push_back( vScores );
-		vScores.clear();
-
-		vector<double> vProduct = vProductSpecific;
-		for(std::vector<int>::iterator itFact = dPrevScores.back().begin(); itFact != dPrevScores.back().end(); ++itFact)
-		{
-			vector<pair<int,double> >& vNeurProb = g_vFactNeurProb[*itFact];
-			for(std::vector<pair<int,double> >::iterator itProb = vNeurProb.begin(); itProb != vNeurProb.end(); ++itProb)
-				vProduct[itProb->first] *= 1.0 - itProb->second;
-		}
-
-		for(int l = 0; l != g_vFactNeurProb.size(); ++l)
-		{
-			double If = 0, Iq = 0;
-			double fi, qi;
-			bool bScore = std::binary_search(dPrevScores.back().begin(), dPrevScores.back().end(), l);
-			vector<pair<int,double> >& vNeurProb = g_vFactNeurProb[l];
-			std::vector<int>::iterator itPatNeur = vPattern.begin();
-			for(std::vector<pair<int,double> >::iterator itFactNeur = vNeurProb.begin(); itFactNeur != vNeurProb.end(); ++itFactNeur)
-			{
-				if( bScore )
-					fi = 1 - vProduct[itFactNeur->first], qi = 1 - vProduct[itFactNeur->first] / ((1 - itFactNeur->second) == 0 ? 0.0000000000001 : 1 - itFactNeur->second );
-				else
-					fi = 1 - vProduct[itFactNeur->first] * (1 - itFactNeur->second), qi = 1 - vProduct[itFactNeur->first];
-				while( itPatNeur != vPattern.end() && *itPatNeur < itFactNeur->first )
-					++itPatNeur;
-				if( itPatNeur != vPattern.end() && *itPatNeur == itFactNeur->first )
-				{
-					If += log( fi == 0 ? 0.000000000001 : fi );
-					Iq += log( qi == 0 ? 0.000000000001 : qi );
-				}
-				else
-				{
-					If += log( (1 - fi) == 0 ? 0.000000000001 : 1 - fi );
-					Iq += log( (1 - qi) == 0 ? 0.000000000001 : 1 - qi );
-				}
-			}
-			If += log( g_vFactProb[l] == 0 ? 0.0000000001 : g_vFactProb[l] );
-			Iq += log( (1 - g_vFactProb[l]) == 0 ? 0.0000000001 : (1 - g_vFactProb[l]) );
-			if( If > Iq )
-				vScores.push_back( l );
-		}
-
-		vector<int> vScoreDifference;
-		int OvInt = mylib::OverlapSimple( vScores, dPrevScores.back() );
-		nScoreDifference = max(vScores.size(), dPrevScores.back().size()) - OvInt;
-		int OvInt2 = mylib::OverlapSimple( vScores, dPrevScores.front() );
-		nScoreDifference2 = max(vScores.size(), dPrevScores.front().size()) - OvInt2;
-		nCycle = (nScoreDifference <= nScoreDifference2) ? 1 : 2;
-
-		++nStep;
-		//cout << k << "\t" << nStep << "\t\t" << ComputeLikelihood(k, vScores) << "\n";
-
-	} while( min(nScoreDifference,nScoreDifference2) > 0 );
-
-	//double fLikelihood = ComputeLikelihood(k, vScores);
-	//cout << k << "\t" << nStep << "\t" << nCycle << "\t" << fLikelihood << "\n";
-
-	return nStep;
-}*/
 
 
 // asynchronous maximization algorithm
@@ -428,12 +315,7 @@ int CScoresOptimizer::MaximizeLikelihood(int k, vector<int>& vScores)
 	for(std::vector<int>::iterator it = vScores.begin(); it != vScores.end(); ++it)
 		vDenseScores[*it] = 1;
 
-/* для отладки
-	pair<double,double> paLikelihood = ComputeLikelihood(k, m_pData, vDenseScores, m_vFactProb);
-	vector<int> vPrevDenseScores = vDenseScores; 
-	int nPrevSize = std::accumulate(vDenseScores.begin(), vDenseScores.end(), (int)0);
-	cout << k << "\t" << paLikelihood.first << "\t" << paLikelihood.second << "\t" << nPrevSize << "\t\t";
-*/
+
 
 	int nStep = 0;
 	deque<int> dScoreDifference(nFactors, 1);
@@ -457,18 +339,7 @@ int CScoresOptimizer::MaximizeLikelihood(int k, vector<int>& vScores)
 		//cout << k << "\t" << nStep << "\t" << paLikelihood.first + paLikelihood.second << "\n";
 	} while( std::accumulate(dScoreDifference.begin(), dScoreDifference.end(), 0) != 0 );
 
-	//double fLikelihood = ComputeLikelihood(g_vPatterns[k], vDenseScores);
-	//cout << k << "\t" << nStep << "\t" << fLikelihood << "\n";
-
-/* для отладки
-	paLikelihood = ComputeLikelihood(k, m_pData, vDenseScores, m_vFactProb);
-	int nSize = std::accumulate(vDenseScores.begin(), vDenseScores.end(), (int)0);
-	cout << "\t" << paLikelihood.first << "\t" << paLikelihood.second << "\t" << nSize << "\t\t";
-	int nOv = std::inner_product(vPrevDenseScores.begin(), vPrevDenseScores.end(), vDenseScores.begin(), (int)0);
-	cout << "  " << nPrevSize - nOv << "  /  " << nPrevSize << "\t";
-	cout << "  " << nSize - nOv << "  /  " << nSize << "\t";
-	cout << "\n";
-*/
+	
 
 	vScores.clear();
 	for(std::vector<int>::iterator it = vDenseScores.begin(); it != vDenseScores.end(); ++it)
